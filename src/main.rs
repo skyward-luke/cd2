@@ -15,7 +15,11 @@ use std::{env, fs};
 struct PathWeight {
     path: String,
     count: u16,
-    ts: u128,
+    ts: u64,
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PathWeightVec {
+    weights: Vec<PathWeight>,
 }
 
 fn main() -> std::io::Result<()> {
@@ -23,7 +27,7 @@ fn main() -> std::io::Result<()> {
     // dbg!(&args);
 
     let to_path = &args[1];
-    dbg!(to_path);
+    dbg!(&to_path);
 
     let mut weights_buf = my_home().unwrap().expect("to get user home dir");
     weights_buf.push(".cd2");
@@ -37,7 +41,7 @@ fn main() -> std::io::Result<()> {
         Ok(_) => (),
         Err(_err) => {
             let mut f = File::create(weights_path).expect("could not create weights file");
-            f.write_all("[]".as_bytes()).unwrap();
+            f.write_all("".as_bytes()).unwrap();
         }
     };
 
@@ -54,10 +58,13 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn read_weights(weights_path: &str) -> Result<Vec<PathWeight>, serde_json::Error> {
+fn read_weights(weights_path: &str) -> Vec<PathWeight> {
     let contents = fs::read_to_string(weights_path).unwrap();
 
-    serde_json::from_str(&contents)
+    let v: PathWeightVec =
+        toml::from_str(&contents).unwrap_or_else(|_| PathWeightVec { weights: vec![] });
+
+    v.weights
 }
 
 fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
@@ -78,7 +85,7 @@ fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
         });
     }
 
-    let weights: Vec<PathWeight> = read_weights(weights_path).unwrap();
+    let weights: Vec<PathWeight> = read_weights(weights_path);
 
     let matched: Vec<PathWeight> = weights
         .into_iter()
@@ -97,7 +104,7 @@ fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
     let max_ts = matched.iter().max_by_key(|i| i.ts).unwrap().ts;
 
     // if max ts for the group is within X seconds, get next highest weight, then restart
-    if now() - max_ts < 5000 {
+    if now() - max_ts < 5 {
         let idx = matched.iter().position(|w| w.ts == max_ts).unwrap();
         if matched.len() <= idx + 1 {
             return Some(matched[0].clone()); // vector is exhausted, start over
@@ -110,7 +117,7 @@ fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
 }
 
 fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> {
-    let mut weights: Vec<PathWeight> = read_weights(weights_path).unwrap();
+    let mut weights: Vec<PathWeight> = read_weights(weights_path);
     // println!("{:?}", d);
 
     let found = weights.iter().position(|w| w.path == to_path);
@@ -133,16 +140,16 @@ fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> 
     // sort by count descending across all entries
     weights.sort_by(|a, b| b.count.cmp(&a.count));
 
-    let j = serde_json::to_string(&weights)?;
+    let t = toml::to_string(&PathWeightVec { weights: weights }).unwrap();
 
     let mut f = File::options().write(true).open(weights_path)?;
-    f.write_all(j.as_bytes())?;
+    f.write_all(t.as_bytes())?;
     Ok(to_path.to_string())
 }
 
-fn now() -> u128 {
+fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis()
+        .as_secs()
 }
