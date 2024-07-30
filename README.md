@@ -23,3 +23,10 @@ function cc {
   echo $res
 }
 ```
+
+- Source .rc file: `source ~/.bashrc`
+
+- Use the new function:
+  - `cc path/to/my/proj`
+  - `cc ~`
+  - `cc proj`
