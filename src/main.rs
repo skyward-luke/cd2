@@ -137,14 +137,19 @@ fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> 
         }
     }
 
-    // sort by count descending across all entries
-    weights.sort_by(|a, b| b.count.cmp(&a.count));
+    sort_by_count(&mut weights);
 
     let t = toml::to_string(&PathWeightVec { weights: weights }).unwrap();
 
     let mut f = File::options().write(true).open(weights_path)?;
     f.write_all(t.as_bytes())?;
+
     Ok(to_path.to_string())
+}
+
+fn sort_by_count(weights: &mut Vec<PathWeight>) {
+    // sort by count descending across all entries
+    weights.sort_by(|a, b| b.count.cmp(&a.count));
 }
 
 fn now() -> u64 {
@@ -152,4 +157,31 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_now() {
+        assert!(now() > 0);
+    }
+
+    #[test]
+    fn test_sort_by_count() {
+        let mut weights = vec![
+            PathWeight {
+                count: 0,
+                ts: 0,
+                path: String::from("bogus"),
+            },
+            PathWeight {
+                count: 1,
+                ts: 0,
+                path: String::from("bogus"),
+            },
+        ];
+        assert_eq!(sort_by_count(&mut weights), weights.reverse());
+    }
 }
