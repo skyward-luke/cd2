@@ -1,17 +1,12 @@
 # cd2
 
-A feature clone of `autojump` - written in Rust.
+A feature clone of [autojump](https://github.com/wting/autojump) - written in Rust.
 
 Keeps a count of the times you `cd` into a filesystem dir and sends you to most popular directories accordingly.
 
 ## Install
 
-(WIP)
-
-- Build and cp the binary to your PATH
-  - cargo build --release
-  - cp target/release/cd2 <TO_PATH>
-
+- Download the binary from [Releases](https://github.com/skyward-luke/cd2/releases)
 - Add the following to your shell .rc file, like .bashrc:
 
 ```bash
@@ -30,3 +25,10 @@ function cc {
   - `cc path/to/my/proj`
   - `cc ~`
   - `cc proj`
+
+## Build locally
+
+Build and cp the binary to your PATH
+
+- `cargo build --release`
+- `cp target/release/cd2 <TO_PATH>`
