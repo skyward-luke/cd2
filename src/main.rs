@@ -6,7 +6,7 @@ use homedir::my_home;
 
 use std::fs::{canonicalize, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 // use std::process::exit;
@@ -17,6 +17,7 @@ struct PathWeight {
     count: u16,
     ts: u64,
 }
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct PathWeightVec {
     weights: Vec<PathWeight>,
@@ -29,28 +30,14 @@ fn main() -> std::io::Result<()> {
     let to_path = &args[1];
     dbg!(&to_path);
 
-    let mut weights_buf = my_home().unwrap().expect("to get user home dir");
-    weights_buf.push(".cd2");
-    dbg!(&weights_buf);
+    let weights_buf = create_weights_file();
 
-    let weights_path = weights_buf.to_str().expect("to get str from path");
-
-    let res = File::options().append(true).open(weights_path);
-
-    match res {
-        Ok(_) => (),
-        Err(_err) => {
-            let mut f = File::create(weights_path).expect("could not create weights file");
-            f.write_all("".as_bytes()).unwrap();
-        }
-    };
-
-    let matched = match_partial_path(weights_path, to_path);
+    let matched = match_partial_path(&weights_buf, to_path);
     dbg!(&matched);
 
     let s = match matched {
-        Some(w) => update_weights(weights_path, &w.path).expect("to update weights file"),
-        None => update_weights(weights_path, to_path).expect("to update weights file"),
+        Some(w) => update_weights(&weights_buf, &w.path).expect("to update weights file"),
+        None => update_weights(&weights_buf, to_path).expect("to update weights file"),
     };
 
     std::io::stdout().write_all(s.as_bytes())?;
@@ -58,16 +45,46 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn read_weights(weights_path: &str) -> Vec<PathWeight> {
-    let contents = fs::read_to_string(weights_path).unwrap();
+fn create_weights_file() -> PathBuf {
+    let mut weights_buf = my_home().unwrap().expect("to get user home dir");
 
+    weights_buf.push(".cd2");
+    dbg!(&weights_buf);
+
+    // try to open file and create if fails
+    let res = File::options().append(true).open(&weights_buf);
+
+    match res {
+        Ok(_) => (),
+        Err(_err) => {
+            let mut f = File::create(&weights_buf).expect("could not create weights file");
+            f.write_all("".as_bytes()).unwrap();
+        }
+    };
+
+    weights_buf
+}
+
+fn read_weights(weights_path: &Path) -> std::io::Result<Vec<PathWeight>> {
+    let contents = fs::read_to_string(weights_path)?;
+
+    // create empty vec if file is empty
     let v: PathWeightVec =
         toml::from_str(&contents).unwrap_or_else(|_| PathWeightVec { weights: vec![] });
 
-    v.weights
+    Ok(v.weights)
 }
 
-fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
+fn write_weights(weights_path: &Path, weights: Vec<PathWeight>) -> std::io::Result<()> {
+    let t = toml::to_string(&PathWeightVec { weights: weights }).unwrap();
+
+    let mut f = File::options().write(true).open(weights_path)?;
+    f.write_all(t.as_bytes())?;
+
+    Ok(())
+}
+
+fn match_partial_path(weights_path: &Path, to_path: &str) -> Option<PathWeight> {
     let _to_path = Path::new(to_path);
 
     // if full path return a shell struct with path set to input
@@ -85,7 +102,7 @@ fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
         });
     }
 
-    let weights: Vec<PathWeight> = read_weights(weights_path);
+    let weights: Vec<PathWeight> = read_weights(weights_path).expect("failed to read weights file");
 
     let matched: Vec<PathWeight> = weights
         .into_iter()
@@ -116,13 +133,14 @@ fn match_partial_path(weights_path: &str, to_path: &str) -> Option<PathWeight> {
     Some(matched[0].clone())
 }
 
-fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> {
-    let mut weights: Vec<PathWeight> = read_weights(weights_path);
+fn update_weights(weights_path: &Path, to_path: &str) -> std::io::Result<String> {
+    let mut weights: Vec<PathWeight> = read_weights(weights_path)?;
     // println!("{:?}", d);
 
     let found = weights.iter().position(|w| w.path == to_path);
     match found {
         None => {
+            // not found, create new path weight
             if Path::new(to_path).exists() {
                 weights.push(PathWeight {
                     path: to_path.to_string(),
@@ -132,6 +150,7 @@ fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> 
             }
         }
         Some(n) => {
+            // existing path weight, increment count and update ts
             weights[n].count += 1;
             weights[n].ts = now();
         }
@@ -139,10 +158,7 @@ fn update_weights(weights_path: &str, to_path: &str) -> std::io::Result<String> 
 
     sort_by_count(&mut weights);
 
-    let t = toml::to_string(&PathWeightVec { weights: weights }).unwrap();
-
-    let mut f = File::options().write(true).open(weights_path)?;
-    f.write_all(t.as_bytes())?;
+    write_weights(weights_path, weights)?;
 
     Ok(to_path.to_string())
 }
