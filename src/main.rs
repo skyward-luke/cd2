@@ -52,15 +52,14 @@ fn create_weights_file() -> PathBuf {
     dbg!(&weights_buf);
 
     // try to open file and create if fails
-    let res = File::options().append(true).open(&weights_buf);
-
-    match res {
-        Ok(_) => (),
-        Err(_err) => {
+    File::options()
+        .append(true)
+        .open(&weights_buf)
+        .unwrap_or_else(|_e| {
             let mut f = File::create(&weights_buf).expect("could not create weights file");
             f.write_all("".as_bytes()).unwrap();
-        }
-    };
+            f
+        });
 
     weights_buf
 }
