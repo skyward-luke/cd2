@@ -32,3 +32,12 @@ Build and cp the binary to your PATH
 
 - `cargo build --release`
 - `cp target/release/cd2 <TO_PATH>`
+
+## Cross-compile for Linux
+
+MacOS build with linux target
+
+- `rustup target add x86_64-unknown-linux-musl`
+- `brew install FiloSottile/musl-cross/musl-cross`
+- `TARGET_CC=x86_64-linux-musl-gcc cargo build --release --target x86_64-unknown-linux-musl`
+- `cp target/x86_64-unknown-linux-musl/release/cd2 <TO_PATH>`
